@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
 import "dotenv/config";
+import path from "path";
+import { fileURLToPath } from "url";
 
 // ───────────────────────────────────────────────────────────────────────────────
 // Конфиг и базовая инициализация
@@ -8,7 +10,13 @@ import "dotenv/config";
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
-app.use(express.static("public"));
+
+// Абсолютный путь к директории проекта (для sendFile):
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Раздача статических файлов из /public
+app.use(express.static(path.join(__dirname, "public")));
 
 const {
   RAPIDAPI_KEY,
@@ -60,6 +68,13 @@ function stripMarkdownFence(s) {
 }
 
 // ───────────────────────────────────────────────────────────────────────────────
+// Роут главной страницы (чтобы "/" всегда отдавался на Vercel/Express)
+// ───────────────────────────────────────────────────────────────────────────────
+app.get("/", (_req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// ───────────────────────────────────────────────────────────────────────────────
 // 1) Эндпойнт: получить транскрипт через RapidAPI
 // ───────────────────────────────────────────────────────────────────────────────
 app.get("/api/transcript", async (req, res) => {
@@ -105,7 +120,7 @@ app.get("/api/summary", async (req, res) => {
     const videoId = String(req.query.videoId || "").trim();
     if (!videoId) return res.status(400).json({ error: "Параметр videoId обязателен" });
 
-    // 2.1 транскрипт
+    // 2.1 транскрипт (через наш же API)
     const txResp = await fetch(
       `${req.protocol}://${req.get("host")}/api/transcript?videoId=${encodeURIComponent(videoId)}`
     );
@@ -172,9 +187,14 @@ app.get("/api/summary", async (req, res) => {
 // Health-check
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
-if (!process.env.VERCEL) {
+// ───────────────────────────────────────────────────────────────────────────────
+// Экспорт для Vercel и локальный запуск
+// ───────────────────────────────────────────────────────────────────────────────
+export default app;
+
+const isVercel = !!process.env.VERCEL;
+if (!isVercel) {
   app.listen(Number(PORT), () => {
     console.log(`Server listening on http://localhost:${PORT}`);
   });
 }
-export default app;
