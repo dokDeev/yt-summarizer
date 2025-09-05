@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>YT → Gemini Summary</title>
+  <style>
+    body { font-family: -apple-system, system-ui, Segoe UI, Roboto, Arial; margin: 2rem; max-width: 900px }
+    input, button { padding: .6rem .8rem; font-size: 1rem }
+    .row { display: flex; gap: .5rem; margin-bottom: 1rem }
+    pre { background: #f6f6f6; padding: .75rem; overflow: auto; border-radius: .5rem }
+    .muted { color: #666 }
+  </style>
+</head>
+<body>
+  <h1>Суммаризация YouTube через RapidAPI + Gemini 2.5 Flash</h1>
+  <div class="row">
+    <input id="videoInput" placeholder="Вставьте YouTube URL или videoId" style="flex:1" />
+    <button id="goBtn">Сделать описание</button>
+  </div>
+  <div id="out" class="muted">Готов к работе…</div>
+
+  <script>
+    const parseVideoId = (s) => {
+      try {
+        const u = new URL(s);
+        if (u.hostname.includes("youtu.be")) return u.pathname.replace("/", "");
+        if (u.hostname.includes("youtube.com")) return u.searchParams.get("v");
+      } catch {}
+      return s; // уже ID
+    };
+
+    document.getElementById("goBtn").onclick = async () => {
+      const raw = document.getElementById("videoInput").value.trim();
+      const videoId = parseVideoId(raw);
+      const out = document.getElementById("out");
+      out.textContent = "Запрашиваю…";
+      try {
+        const r = await fetch(`/api/summary?videoId=${encodeURIComponent(videoId)}`);
+        const data = await r.json();
+        if (!r.ok) throw new Error(data?.error || "HTTP " + r.status);
+        const esc = (t="") => t.replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+        out.innerHTML = `
+          <h2>Результат</h2>
+          <pre>${esc(JSON.stringify(data.summary, null, 2))}</pre>
+          <details><summary>Предпросмотр транскрипта (первые 1000 символов)</summary>
+            <pre>${esc(data.transcriptPreview || "")}</pre>
+          </details>
+        `;
+      } catch (e) {
+        out.innerHTML = '<pre style="color:#b00">Ошибка: ' + (e.message || e) + '</pre>';
+      }
+    };
+  </script>
+</body>
+</html>
